@@ -1,0 +1,1538 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Astralle (by Plutonnica)</title>
+  <style>
+    /* Reset minimal */
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100vh}
+    body{
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      color:#eaf2ff;
+      background: radial-gradient(ellipse at center, rgba(255,255,255,0.02), rgba(0,0,0,0.6));
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      min-height:100vh;
+      position:relative;
+      overflow:hidden; /* evita scroll da página */
+    }
+
+    /* Plano de fundo com imagem fornecida pelo usuário */
+    .bg {
+      position:fixed;
+      inset:0;
+      background-image: url('bg/bg-2.jpg');
+      background-size:cover;
+      background-position:center;
+      filter: saturate(0.9) contrast(0.9) brightness(0.5);
+      z-index:-3;
+    }
+    /* Partículas sutis (CSS) */
+    .stars::after{
+      content:"";
+      position:fixed;
+      inset:0;
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(255,255,255,0.06) 0px, transparent 1px),
+        radial-gradient(circle at 80% 30%, rgba(255,255,255,0.04) 0px, transparent 1px),
+        radial-gradient(circle at 20% 80%, rgba(255,255,255,0.03) 0px, transparent 1px);
+      background-size: 200px 200px;
+      opacity:0.9;
+      z-index:-2;
+      pointer-events:none;
+    }
+
+    /* Overlay para legibilidade */
+    .overlay{
+      position:fixed; inset:0; background: linear-gradient(180deg, rgba(2,6,23,0.45), rgba(2,6,23,0.7));
+      z-index:-1;
+    }
+
+    /* Layout central */
+    .container{
+      max-width:1100px;
+      margin:20px auto;
+      padding:16px;
+      display:grid;
+      grid-template-columns: 420px minmax(340px,1fr);
+      gap:20px;
+      align-items:start;
+      height: calc(100vh - 40px); /* garante que container caiba na tela */
+      overflow:visible;
+      transition: transform .36s ease;
+    }
+      body.show-result .card:first-child{transform:translateX(-8%);opacity:0.92;transition:transform .36s ease, opacity .36s}
+    /* Estado inicial: centraliza o formulário e oculta visualmente a área de resultado (resultado é posicionada fixed)
+       Adicionamos a classe `centered-form` ao <body> no boot() para este comportamento. */
+    body.centered-form .container{max-width:460px; grid-template-columns:420px; justify-items:center}
+
+    /* Card do formulário */
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius:16px;
+      padding:18px;
+      backdrop-filter: blur(8px) saturate(1.1);
+      box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+    }
+
+    h1{font-size:20px;margin-bottom:8px;letter-spacing:0.2px}
+    p.lead{color:#d7e7ff88;font-size:13px;margin-bottom:12px}
+
+    label{display:block;font-size:13px;margin-top:12px;color:#bcd0ff}
+    input[type="text"], input[type="date"], input[type="time"], select{
+      width:100%;
+      padding:10px 12px;
+      margin-top:6px;
+      background: rgba(255,255,255,0.02);
+      border:1px solid rgba(255,255,255,0.04);
+      color: #eaf2ff;
+      border-radius:8px;
+      font-size:14px;
+    }
+    .row{display:flex;gap:8px}
+    .small{flex:1}
+
+    .hint{font-size:12px;color:#c1d8ff88;margin-top:6px}
+
+    .actions{display:flex;gap:8px;margin-top:14px;align-items:center}
+    button.primary{
+      background: linear-gradient(90deg,#8b5cf6,#7c3aed);
+      border:none;padding:10px 14px;border-radius:10px;color:white;font-weight:600;
+      cursor:pointer;box-shadow: 0 6px 18px rgba(124,58,237,0.2);
+      transition:transform .18s ease, box-shadow .18s;
+    }
+    button.primary:hover{transform:translateY(-3px); box-shadow:0 12px 30px rgba(124,58,237,0.22)}
+
+    button.ghost{
+      background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;color:#dbe9ff;
+      cursor:pointer;
+    }
+
+    /* Área de resultado */
+    .result{
+      min-height:420px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    /* Resultado escondido até gerar */
+    /* Tornar a área de resultado um painel fixo que entra da direita */
+    .card.result{
+      position:fixed;
+      top:2vh;
+      right:-120%;
+      width:min(1280px,98vw);
+      max-width:99vw;
+      height:96vh;
+      max-height:96vh;
+      overflow:auto;
+      -webkit-overflow-scrolling:touch;
+      z-index:60;
+      transition:right .46s cubic-bezier(.2,.9,.25,1), opacity .36s ease, transform .36s ease;
+      box-shadow:0 28px 80px rgba(2,6,23,0.7);
+      display:flex; flex-direction:column; border-radius:14px
+    }
+    .card.result{opacity:0;pointer-events:none}
+    .card.result.visible{right:1vw; opacity:1; pointer-events:auto; transform:translateX(0)}
+
+    @media (max-width:1100px){
+      .card.result{width:99vw; max-width:99vw;}
+    }
+    @media (max-width:880px){
+      .card.result{top:2vw; right:-120%; width:99vw; max-width:99vw; height:96vh; max-height:96vh; border-radius:10px}
+      .card.result.visible{right:1vw}
+    }
+        @media (min-width:900px){
+          .result-content{
+            display: flex;
+            flex-direction: row;
+            gap: 32px;
+            height: 100%;
+          }
+          .result-left{
+            min-width: 280px;
+            max-width: 340px;
+            flex: 0 0 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+          .result-right{
+            flex: 1 1 0%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+        }
+    @media (max-width:560px){
+      .card.result{top:0; right:0; left:0; bottom:0; width:100%; height:100%; border-radius:0}
+      .card.result.visible{right:0}
+    }
+    /* custom scrollbar for the result panel */
+    .card.result::-webkit-scrollbar{width:12px}
+    .card.result::-webkit-scrollbar-track{background:transparent}
+    .card.result::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#7c3aed,#5b21b6);border-radius:8px;border:3px solid rgba(0,0,0,0.06)}
+    .card.result{scrollbar-width:thin; scrollbar-color: rgba(124,58,237,0.8) transparent}
+    .top{
+      display:flex;gap:12px;align-items:center;position:relative;padding-right:48px;
+    }
+    .close-result{position:absolute; right:12px; top:8px; background:transparent; border:none; color:#cfe6ff; font-size:14px; padding:8px 10px; cursor:pointer; border-radius:8px}
+    .close-result:hover{background:rgba(255,255,255,0.02)}
+    .sign-illustration{
+      width:86px;height:86px;border-radius:12px;display:grid;place-items:center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+      border:1px solid rgba(255,255,255,0.04);
+      font-size:36px;
+      transition:transform .6s cubic-bezier(.2,.9,.25,1), opacity .5s;
+      opacity:0; transform: translateY(6px) scale(.98);
+    }
+    .planet-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+    .planet-badge{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);font-size:13px;color:#eaf2ff}
+    .planet-icon{font-size:16px}
+    .legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+    .house-label{font-size:12px;color:rgba(200,220,255,0.9)}
+    .info{
+      flex:1;
+    }
+    .meta{font-size:13px;color:#cbdcff; margin-bottom:6px}
+
+    /* Canvas do mapa */
+    /* Chart area: vertical layout to allow larger map and summary below */
+    .chart-wrap{
+      width:100%;
+      display:flex;
+      gap:12px;
+      flex-direction:column;
+      align-items:stretch;
+    }
+    canvas#chart{
+      width:100%;
+      height: min(60vh,720px);
+      background: linear-gradient(180deg, rgba(255,255,255,0.012), rgba(255,255,255,0.01));
+      border-radius:12px;padding:8px;border:1px solid rgba(255,255,255,0.04);
+      box-shadow: 0 8px 32px rgba(2,6,23,0.55);
+      transition:opacity .5s, transform .5s;
+      opacity:0; transform: translateY(6px) scale(.997);
+      display:block;
+      box-sizing:border-box;
+    }
+
+    .reading{
+      padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
+      border:1px solid rgba(255,255,255,0.04);
+      color:#eaf2ff; font-size:13px; line-height:1.45;
+      opacity:0; transform:translateY(8px);
+      transition:opacity .6s, transform .6s;
+      overflow:auto;
+      max-height: calc(28vh);
+      /* Custom scrollbar themed */
+      scrollbar-width: thin;
+      scrollbar-color: rgba(140,120,255,0.7) rgba(255,255,255,0.03);
+    }
+    .reading::-webkit-scrollbar{width:10px}
+    .reading::-webkit-scrollbar-track{background:transparent;border-radius:8px}
+    .reading::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#7c3aed,#5b21b6);border-radius:8px;border:2px solid rgba(0,0,0,0.08)}
+
+    /* Entradas pequenas */
+    .inline{
+      display:flex;gap:8px;align-items:center;margin-top:8px;
+    }
+    .small-checkbox{display:flex;gap:6px;align-items:center;color:#cbdcff;font-size:13px}
+
+    /* Responsiveness */
+    @media (max-width:980px){
+      .container{grid-template-columns:1fr; padding:18px}
+      canvas#chart{width:100%!important;height:56vh!important}
+    }
+
+    /* Appear animations helper */
+    .show{opacity:1; transform:none}
+    /* Autocomplete suggestions */
+    .card{position:relative}
+    .suggestions{
+      position:absolute; left:18px; right:18px; top:176px; /* approximate under city input */
+      background: rgba(2,6,23,0.96); border:1px solid rgba(255,255,255,0.04); border-radius:10px; z-index:40;
+      max-height:220px; overflow:auto; box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+      display:none;
+    }
+    .suggestions.active{display:block}
+    .suggestion-item{padding:8px 12px; cursor:pointer; color:#e6f4ff; font-size:14px}
+    .suggestion-item:hover{background:rgba(255,255,255,0.02)}
+    /* footer */
+    footer{margin:30px auto; text-align:center;color:#9fb9ff66;font-size:13px}
+  </style>
+</head>
+<body class="stars">
+  <div class="bg" aria-hidden="true"></div>
+  <div class="overlay" aria-hidden="true"></div>
+
+  <main class="container" role="main">
+    <!-- Formulário -->
+    <section class="card" aria-labelledby="title">
+      <h1 id="title">Astralle (by Plutonnica)</h1>
+        <p class="lead">Insira seus dados (ou deixe que detectemos sua localização). Cálculos simplificados, leitura mística e moderna.</p>
+
+      <label for="name">Nome (opcional)</label>
+      <input id="name" type="text" placeholder="Ex.: Maria">
+
+      <div class="row">
+        <div class="small">
+          <label for="date">Data de nascimento</label>
+          <input id="date" type="date" required>
+        </div>
+        <div class="small">
+          <label for="time">Hora de nascimento</label>
+          <input id="time" type="time" value="12:00">
+          <div class="inline">
+            <label class="small-checkbox"><input id="timeUnknown" type="checkbox"> Não sei a hora</label>
+          </div>
+        </div>
+      </div>
+
+      <label for="city">Cidade, UF</label>
+      <input id="city" type="text" placeholder="Ex.: São Paulo, SP" autocomplete="off">
+      <div id="citySuggestions" class="suggestions" aria-hidden="true"></div>
+
+      <div class="row">
+        <div style="flex:1">
+          <label for="country">País</label>
+          <input id="country" type="text" value="Brasil">
+        </div>
+        <div style="width:160px">
+          <label for="lat">Latitude</label>
+          <input id="lat" type="text" placeholder="ex: -23.5505">
+        </div>
+        <div style="width:160px">
+          <label for="lon">Longitude</label>
+          <input id="lon" type="text" placeholder="ex: -46.6333">
+        </div>
+      </div>
+
+      <label for="theme">Tema da leitura</label>
+      <select id="theme">
+        <option value="geral">Geral</option>
+        <option value="amor">Amor</option>
+        <option value="trabalho">Trabalho</option>
+        <option value="espiritualidade">Espiritualidade</option>
+      </select>
+
+      <div class="hint">
+        Geolocalização é obrigatória para o mapa. Os dados de localização são obtidos automaticamente por IP na primeira vez e podem ser editados manualmente.
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="generateBtn">Gerar mapa astral</button>
+        <button class="ghost" id="useGeoBtn" title="Tentar usar geolocation do navegador">Usar localização do navegador</button>
+        <div style="flex:1"></div>
+        <button class="ghost" id="resetBtn">Limpar</button>
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:#9fb9ff66">
+        Nota: cálculos simplificados, coerentes para uma leitura estilizada. Para cálculo profissional de casas, considere uma biblioteca astronômica dedicada.
+      </div>
+    </section>
+
+    <!-- Resultado -->
+    <section class="card result" aria-live="polite">
+      <button id="closeResultBtn" class="close-result" aria-label="Fechar painel">Fechar ✕</button>
+      <div class="result-content">
+        <div class="result-left">
+          <div class="top">
+            <div class="sign-illustration" id="signIllustration" aria-hidden="true">♑︎</div>
+            <div class="info">
+              <div class="meta" id="metaInfo">Preencha os dados e clique em "Gerar mapa astral".</div>
+                <div id="planetIcons" class="planet-row" aria-hidden="true"></div>
+                <div id="usedDataBlock" style="margin-top:14px">
+                  <div style="font-size:13px;color:#9fc6ff;margin-bottom:4px">Dados usados</div>
+                  <div style="font-size:13px;color:#dbe9ff">
+                    <div id="usedLocation">Cidade: —</div>
+                    <div id="usedCoords">Latitude: — | Longitude: —</div>
+                    <div id="usedDatetime">Data/Hora: —</div>
+                  </div>
+                </div>
+            </div>
+          </div>
+        </div>
+        <div class="result-right">
+          <div class="chart-wrap">
+            <canvas id="chart" width="420" height="420" aria-label="Mapa astral gráfico"></canvas>
+            <div class="info-row" style="display:flex;gap:12px;align-items:flex-start;margin-top:12px">
+              <div style="min-width:260px">
+                <div style="font-size:13px;color:#9fc6ff;margin-bottom:8px">Legenda</div>
+                <div id="legend" class="legend"></div>
+              </div>
+            </div>
+            <div class="reading" id="reading" style="margin-top:12px;">
+              <!-- Texto gerado aqui -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Astralle (by Plutonnica) — criado com código simples. Imagem de fundo: bg/bg-2.jpg
+  </footer>
+
+  <script>
+    /* ---------------------------
+       Observações gerais (PT-BR)
+       - Comentários em Português.
+       - Funções em Inglês (nomes).
+       - Cálculos simplificados: Julian Date, GMST, LST usados.
+       - Ascendente e casas calculados por método aproximado / whole-sign baseado no LST.
+    ---------------------------- */
+
+    // Referências rápidas para signos
+    const ZODIAC = [
+      {name:'Áries', glyph:'♈︎', start:{m:3,d:21}, end:{m:4,d:19}},
+      {name:'Touro', glyph:'♉︎', start:{m:4,d:20}, end:{m:5,d:20}},
+      {name:'Gêmeos', glyph:'♊︎', start:{m:5,d:21}, end:{m:6,d:20}},
+      {name:'Câncer', glyph:'♋︎', start:{m:6,d:21}, end:{m:7,d:22}},
+      {name:'Leão', glyph:'♌︎', start:{m:7,d:23}, end:{m:8,d:22}},
+      {name:'Virgem', glyph:'♍︎', start:{m:8,d:23}, end:{m:9,d:22}},
+      {name:'Libra', glyph:'♎︎', start:{m:9,d:23}, end:{m:10,d:22}},
+      {name:'Escorpião', glyph:'♏︎', start:{m:10,d:23}, end:{m:11,d:21}},
+      {name:'Sagitário', glyph:'♐︎', start:{m:11,d:22}, end:{m:12,d:21}},
+      {name:'Capricórnio', glyph:'♑︎', start:{m:12,d:22}, end:{m:1,d:19}},
+      {name:'Aquário', glyph:'♒︎', start:{m:1,d:20}, end:{m:2,d:18}},
+      {name:'Peixes', glyph:'♓︎', start:{m:2,d:19}, end:{m:3,d:20}},
+    ];
+
+    // Elementos DOM
+    const nameInput = document.getElementById('name');
+    const dateInput = document.getElementById('date');
+    const timeInput = document.getElementById('time');
+    const timeUnknown = document.getElementById('timeUnknown');
+    const cityInput = document.getElementById('city');
+    const citySuggestions = document.getElementById('citySuggestions');
+    const countryInput = document.getElementById('country');
+    const latInput = document.getElementById('lat');
+    const lonInput = document.getElementById('lon');
+    const themeInput = document.getElementById('theme');
+    const generateBtn = document.getElementById('generateBtn');
+    const useGeoBtn = document.getElementById('useGeoBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    const signIllustration = document.getElementById('signIllustration');
+    const sunSignText = document.getElementById('sunSignText');
+    const ascText = document.getElementById('ascText');
+    const metaInfo = document.getElementById('metaInfo');
+
+    const usedLocation = document.getElementById('usedLocation');
+    const usedCoords = document.getElementById('usedCoords');
+    const usedDatetime = document.getElementById('usedDatetime');
+    const readingEl = document.getElementById('reading');
+
+    const chartCanvas = document.getElementById('chart');
+    const ctx = chartCanvas.getContext('2d');
+    const resultSection = document.querySelector('.result');
+
+    // Mapeamento de estados BR para siglas (UF)
+    const BRAZIL_UF = {
+      'Acre':'AC','Alagoas':'AL','Amapá':'AP','Amazonas':'AM','Bahia':'BA','Ceará':'CE','Distrito Federal':'DF','Espírito Santo':'ES','Goiás':'GO','Maranhão':'MA','Mato Grosso':'MT','Mato Grosso do Sul':'MS','Minas Gerais':'MG','Pará':'PA','Paraíba':'PB','Paraná':'PR','Pernambuco':'PE','Piauí':'PI','Rio de Janeiro':'RJ','Rio Grande do Norte':'RN','Rio Grande do Sul':'RS','Rondônia':'RO','Roraima':'RR','Santa Catarina':'SC','São Paulo':'SP','Sergipe':'SE','Tocantins':'TO'
+    };
+
+    function debounce(fn, wait=300){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), wait); }; }
+    function getCountryCodeFromInput(name){
+      if (!name) return '';
+      const s = String(name).trim();
+      if (s.length === 2) return s.toUpperCase();
+      if (s.toLowerCase().includes('bra')) return 'BR';
+      return '';
+    }
+
+    // Carrega biblioteca astronomia via CDN (Skypack) para efemérides mais precisas
+    let astronomia = null;
+    let astronomiaReady = false;
+    async function loadAstronomia() {
+      try {
+        astronomia = await import('https://cdn.skypack.dev/astronomia');
+        astronomiaReady = true;
+        console.info('astronomia carregada');
+      } catch (e) {
+        console.warn('Falha ao carregar astronomia via CDN, mantendo cálculos simplificados.', e);
+        astronomia = null;
+        astronomiaReady = false;
+      }
+    }
+    // inicia o carregamento em background
+    loadAstronomia();
+
+    // Função segura que tenta obter posições precisas, com fallback.
+    // Tenta usar a biblioteca `astronomia` (VSOP87) quando carregada; se não, usa os fallbacks simples.
+    async function computeEphemeridesSafe(jdUtc, sunApproxDeg) {
+      // retorna {sunDeg, moonDeg, mercuryDeg, venusDeg, marsDeg, jupiterDeg, saturnDeg, uranusDeg, neptuneDeg, plutoDeg, lilithDeg}
+      const D = jdUtc - 2451545.0;
+      // fallback valores básicos
+      const fallback = {
+        sunDeg: sunApproxDeg,
+        moonDeg: normalizeDeg(218.316 + 13.176396 * D),
+        mercuryDeg: normalizeDeg(sunApproxDeg + 10),
+        venusDeg: normalizeDeg(sunApproxDeg + 40),
+        marsDeg: normalizeDeg(sunApproxDeg + 70),
+        jupiterDeg: normalizeDeg(sunApproxDeg + 100),
+        saturnDeg: normalizeDeg(sunApproxDeg + 140),
+        uranusDeg: normalizeDeg(sunApproxDeg + 180),
+        neptuneDeg: normalizeDeg(sunApproxDeg + 210),
+        plutoDeg: normalizeDeg(sunApproxDeg + 250),
+        lilithDeg: normalizeDeg((218.316 + 13.176396 * D) + 180)
+      };
+
+      if (!astronomiaReady) return fallback;
+
+      try {
+        // tenta múltiplas abordagens para suportar variações do pacote 'astronomia' em CDNs
+        const julian = astronomia.julian || astronomia.Julian || astronomia.JulianDate || null;
+        const moonMod = astronomia.moonposition || astronomia.moon || astronomia.moonposition || astronomia.moonpos || null;
+        const sunMod = astronomia.sunposition || astronomia.sun || astronomia.sunpos || null;
+        const planetpos = astronomia.planetposition || astronomia.planet || astronomia.planetpos || null;
+
+        let moonDeg = null;
+        if (moonMod) {
+          try {
+            if (typeof moonMod.position === 'function') {
+              const m = moonMod.position(jdUtc);
+              moonDeg = m.lon || m.elon || m.el || m.elon || m.lonapparent || m.elong || null;
+            } else if (typeof moonMod === 'function') {
+              const m = moonMod(jdUtc);
+              moonDeg = m.lon || m.elon || null;
+            }
+          } catch(e){ moonDeg = null; }
+        }
+
+        // tentativa para o Sol
+        let sunDeg = null;
+        if (sunMod) {
+          try {
+            if (typeof sunMod.position === 'function') {
+              const s = sunMod.position(jdUtc);
+              sunDeg = s.lon || s.elon || s.lonapparent || s.lambda || null;
+            } else if (typeof sunMod === 'function') {
+              const s = sunMod(jdUtc);
+              sunDeg = s.lon || s.lambda || null;
+            }
+          } catch(e){ sunDeg = null; }
+        }
+
+        // helper para planetas, tentando usar planetposition + dados VSOP quando disponível
+        async function getPlanetLongitude(nameKeys, fallbackOffset) {
+          // nameKeys: array de nomes possíveis no módulo planetposition
+          if (planetpos && astronomia.data) {
+            try {
+              for (const k of nameKeys) {
+                if (astronomia.data[k]) {
+                  const pdata = astronomia.data[k];
+                  const pp = astronomia.planetposition || astronomia.Planet;
+                  if (pp && pp.position) {
+                    const planet = new pp.Planet(pdata);
+                    const pos = planet.position(jdUtc);
+                    // pos may have ecliptic longitude fields
+                    const lon = pos.lon || pos.lambda || pos.el || pos.lonapparent || pos.elon || null;
+                    if (lon !== undefined && lon !== null) return lon;
+                  }
+                }
+              }
+            } catch(e){ }
+          }
+          return normalizeDeg(sunApproxDeg + fallbackOffset);
+        }
+
+        // assemble results trying precise values
+        const mercuryDeg = await getPlanetLongitude(['mercury','mercury_vsop87','mercurius'], 10);
+        const venusDeg = await getPlanetLongitude(['venus','venus_vsop87'], 40);
+        const marsDeg = await getPlanetLongitude(['mars','mars_vsop87'], 70);
+        const jupiterDeg = await getPlanetLongitude(['jupiter','jupiter_vsop87'], 100);
+        const saturnDeg = await getPlanetLongitude(['saturn','saturn_vsop87'], 140);
+        const uranusDeg = await getPlanetLongitude(['uranus','uranus_vsop87'], 180);
+        const neptuneDeg = await getPlanetLongitude(['neptune','neptune_vsop87'], 210);
+        const plutoDeg = await getPlanetLongitude(['pluto','pluto_vsop87'], 250);
+
+        if (!moonDeg) moonDeg = fallback.moonDeg;
+        if (!sunDeg) sunDeg = fallback.sunDeg;
+
+        // Lilith (True Black Moon) não é trivial; deixamos como cabeça do dragão (oposto da lua média) como placeholder
+        let lilithDeg = normalizeDeg((moonDeg || fallback.moonDeg) + 180);
+
+        return {sunDeg: normalizeDeg(sunDeg), moonDeg: normalizeDeg(moonDeg), mercuryDeg: normalizeDeg(mercuryDeg), venusDeg: normalizeDeg(venusDeg), marsDeg: normalizeDeg(marsDeg), jupiterDeg: normalizeDeg(jupiterDeg), saturnDeg: normalizeDeg(saturnDeg), uranusDeg: normalizeDeg(uranusDeg), neptuneDeg: normalizeDeg(neptuneDeg), plutoDeg: normalizeDeg(plutoDeg), lilithDeg};
+      } catch (e) {
+        console.warn('Erro ao usar astronomia para efemérides, usando fallback', e);
+        return fallback;
+      }
+    }
+
+    /* ---------------------------
+       Utilitários astronômicos (simples)
+    ---------------------------- */
+
+    // Converte data UTC para Julian Date
+    function getJulianDate(dateObj) {
+      // dateObj em UTC
+      const year = dateObj.getUTCFullYear();
+      let month = dateObj.getUTCMonth() + 1;
+      const day = dateObj.getUTCDate() + (dateObj.getUTCHours()/24) + (dateObj.getUTCMinutes()/1440) + (dateObj.getUTCSeconds()/86400);
+
+      let y = year;
+      let m = month;
+      if (m <= 2) { y = year - 1; m = month + 12; }
+      const A = Math.floor(y/100);
+      const B = 2 - A + Math.floor(A/4);
+      const JD = Math.floor(365.25 * (y + 4716))
+               + Math.floor(30.6001 * (m + 1))
+               + day + B - 1524.5;
+      return JD;
+    }
+
+    // Calcula GMST (em graus) aproximado a partir do Julian Date
+    function getGMSTDegrees(jd) {
+      const T = (jd - 2451545.0) / 36525.0;
+      let GMST = 280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * T*T - (T*T*T)/38710000;
+      GMST = ((GMST % 360) + 360) % 360;
+      return GMST;
+    }
+
+    // Converte graus para radianos
+    function deg2rad(d){ return d * Math.PI / 180; }
+    function rad2deg(r){ return r * 180 / Math.PI; }
+
+    // Obtem signo solar a partir da data (método clássico)
+    function getSunSign(dateObj) {
+      // Usa mês e dia local (não importa o fuso para signo solar)
+      const month = dateObj.getMonth() + 1;
+      const day = dateObj.getDate();
+      for (const z of ZODIAC) {
+        if (z.start.m === 12 && month === 1) {
+          // Capricórnio (Dez 22 - Jan 19)
+          if (month === 1 && day <= z.end.d) return z;
+        }
+        if (z.start.m <= z.end.m) {
+          if ((month === z.start.m && day >= z.start.d) || (month === z.end.m && day <= z.end.d) || (month > z.start.m && month < z.end.m)) {
+            return z;
+          }
+        } else {
+          // caso envolva ano novo (Capricórnio)
+          if ((month === z.start.m && day >= z.start.d) || (month === z.end.m && day <= z.end.d)) {
+            return z;
+          }
+        }
+      }
+      return ZODIAC[0];
+    }
+
+    // Calcula LST (Local Sidereal Time) em graus a partir do JD e longitude
+    function getLSTDegrees(jd, longitude) {
+      const gmst = getGMSTDegrees(jd);
+      // longitude: graus (leste positivo). LST = GMST + long
+      let lst = gmst + longitude;
+      lst = ((lst % 360) + 360) % 360;
+      return lst;
+    }
+
+    // Calcula ascendente aproximado em graus.
+    // Observação: método simplificado. Converte LST em ângulo do horizonte leste (adiciona 90°),
+    // e usa esse ângulo como posição do Ascendente em eclíptica projetada.
+    // Resultado coerente para leitura visual; não substitui soluções de efemérides profissionais.
+    function computeAscendantApprox(latDeg, lstDeg) {
+      // latDeg em graus; lstDeg em graus
+      // shift LST to horizon intersection (approx)
+      const ascDeg = (lstDeg + 90) % 360;
+      // ajustar levemente com latitude para variar deg do ascendente (simples)
+      const latFactor = (90 - Math.abs(latDeg)) / 90; // 0..1
+      const adj = (latFactor - 0.5) * 10; // +/-5 graus
+      return ((ascDeg + adj) % 360 + 360) % 360;
+    }
+
+    // Converte grau e retorna qual signo e grau dentro do signo
+    function degreeToSign(deg) {
+      const norm = ((deg % 360) + 360) % 360;
+      const signIndex = Math.floor(norm / 30);
+      const sign = ZODIAC[signIndex];
+      const degreeInSign = norm - (signIndex * 30);
+      return {sign, signIndex, degreeInSign, absolute: norm};
+    }
+
+    // Gera casas whole-sign (cada casa começa no 0° do signo do ascendente)
+    function generateWholeSignHouses(ascDeg) {
+      const asc = degreeToSign(ascDeg);
+      // Casa 1 começa no início do signo do ascendente
+      const startOfSign = Math.floor(asc.absolute / 30) * 30;
+      const houses = [];
+      for (let i=0;i<12;i++) {
+        houses.push((startOfSign + i*30) % 360);
+      }
+      return houses;
+    }
+
+    /* ---------------------------
+       Autocomplete Cidade, UF (Nominatim)
+    ---------------------------- */
+    async function fetchCitySuggestions(query, countryCode) {
+      if (!query || query.length < 2) return [];
+      const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=' + encodeURIComponent(query) + (countryCode ? '&countrycodes=' + countryCode.toLowerCase() : '') + '&accept-language=pt';
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data;
+      } catch(e){
+        return [];
+      }
+    }
+
+    function renderSuggestions(items) {
+      citySuggestions.innerHTML = '';
+      if (!items || items.length === 0) { citySuggestions.classList.remove('active'); citySuggestions.setAttribute('aria-hidden','true'); return; }
+      // posiciona abaixo do campo
+      citySuggestions.style.top = (cityInput.offsetTop + cityInput.offsetHeight + 8) + 'px';
+      items.forEach(it => {
+        const addr = it.address || {};
+        const city = addr.city || addr.town || addr.village || addr.hamlet || addr.county || it.display_name.split(',')[0];
+        const stateName = addr.state || addr.region || '';
+        let uf = '';
+        if (stateName && BRAZIL_UF[stateName]) uf = BRAZIL_UF[stateName];
+        const label = uf ? `${city}, ${uf}` : (stateName ? `${city}, ${stateName}` : city);
+        const div = document.createElement('div');
+        div.className = 'suggestion-item';
+        div.textContent = label;
+        div.addEventListener('click', () => {
+          // seleciona
+          selectSuggestion({label, lat: parseFloat(it.lat), lon: parseFloat(it.lon), country_code: addr.country_code, country_name: addr.country || it.display_name.split(',').slice(-1)[0]});
+        });
+        citySuggestions.appendChild(div);
+      });
+      citySuggestions.classList.add('active');
+      citySuggestions.setAttribute('aria-hidden','false');
+    }
+
+    function selectSuggestion({label, lat, lon, country_code, country_name}){
+      cityInput.value = label;
+      latInput.value = lat ? String(lat) : '';
+      lonInput.value = lon ? String(lon) : '';
+      if (country_code || country_name) {
+        countryInput.value = country_name || (country_code ? country_code.toUpperCase() : '');
+      }
+      citySuggestions.classList.remove('active');
+      citySuggestions.setAttribute('aria-hidden','true');
+      // atualiza cache
+      const obj = {city: cityInput.value, country: countryInput.value || '', lat: parseFloat(lat)||0, lon: parseFloat(lon)||0};
+      localStorage.setItem('astro_location_cache_v1', JSON.stringify(obj));
+      updateMeta('Local selecionado: ' + cityInput.value);
+    }
+
+    const debouncedSuggest = debounce(async () => {
+      const q = cityInput.value.trim();
+      if (!q) { renderSuggestions([]); return; }
+      const code = getCountryCodeFromInput(countryInput.value || '');
+      const items = await fetchCitySuggestions(q, code);
+      renderSuggestions(items);
+    }, 320);
+
+    cityInput.addEventListener('input', () => {
+      debouncedSuggest();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!citySuggestions.contains(e.target) && e.target !== cityInput) {
+        citySuggestions.classList.remove('active');
+        citySuggestions.setAttribute('aria-hidden','true');
+      }
+    });
+
+    /* ---------------------------
+       Render gráfico simples do mapa
+       - Desenha círculo dividido em 12 setores
+       - Marca Sol e Ascendente
+       - Animação de fade-in
+    ---------------------------- */
+    function drawChart(sunDeg, ascDeg, houses, bodies=[]) {
+      const c = chartCanvas;
+      const ctx = c.getContext('2d');
+      // ajustar resolução do canvas para evitar distorção e garantir responsividade
+      const dpr = window.devicePixelRatio || 1;
+      const cw = Math.max(200, c.clientWidth);
+      const ch = Math.max(200, c.clientHeight);
+      c.width = Math.floor(cw * dpr);
+      c.height = Math.floor(ch * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // limpar
+      ctx.clearRect(0,0,cw,ch);
+
+      const cx = cw/2, cy = ch/2, r = Math.min(cx,cy) - 18;
+
+      // fundo
+      ctx.save();
+      const grad = ctx.createRadialGradient(cx,cy, r*0.2, cx,cy, r);
+      grad.addColorStop(0, 'rgba(255,255,255,0.02)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.12)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx,cy,r+8,0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+
+      // setores (12)
+      for (let i=0;i<12;i++){
+        const start = (i * 30) * Math.PI/180 - Math.PI/2;
+        const end = ((i+1) * 30) * Math.PI/180 - Math.PI/2;
+
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.arc(cx,cy,r,start,end);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255,255,255,${i%2===0?0.01:0.006})`;
+        ctx.fill();
+
+        // label do signo na borda
+        const mid = (start+end)/2;
+        const tx = cx + Math.cos(mid) * (r - 26);
+        const ty = cy + Math.sin(mid) * (r - 26);
+        ctx.fillStyle = 'rgba(220,235,255,0.92)';
+        ctx.font = '12px Inter, Arial';
+        const signName = ZODIAC[i].glyph;
+        ctx.fillText(signName, tx-6, ty+4);
+      }
+
+      // desenhar círculo interno
+      ctx.beginPath();
+      ctx.arc(cx,cy,r*0.6,0,Math.PI*2);
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fill();
+
+      // linhas das casas (baseadas em houses array) e números
+      ctx.strokeStyle = 'rgba(180,200,255,0.12)';
+      ctx.lineWidth = 1;
+      houses.forEach(hDeg => {
+        const ang = (hDeg - 90) * Math.PI/180;
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.lineTo(cx + Math.cos(ang)*(r+6), cy + Math.sin(ang)*(r+6));
+        ctx.stroke();
+      });
+
+        // desenhar números das casas
+        ctx.fillStyle = 'rgba(200,220,255,0.9)';
+        ctx.font = '12px Inter, Arial';
+        houses.forEach((hDeg, i) => {
+          const mid = ((hDeg + (hDeg + 30))/2 - 90) * Math.PI/180;
+          const tx = cx + Math.cos(mid) * (r + 12);
+          const ty = cy + Math.sin(mid) * (r + 12);
+          ctx.fillText(String(i+1), tx-6, ty+4);
+        });
+
+      // Marca Sol
+      const sunAng = (sunDeg - 90) * Math.PI/180;
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,198,80,0.95)';
+      ctx.arc(cx + Math.cos(sunAng)*(r*0.78), cy + Math.sin(sunAng)*(r*0.78), 10, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(10,10,10,0.95)';
+      ctx.font = '12px Inter, Arial';
+      ctx.fillText('Sol', cx + Math.cos(sunAng)*(r*0.78) - 12, cy + Math.sin(sunAng)*(r*0.78) + 4);
+
+      // Marca Ascendente
+      const ascAng = (ascDeg - 90) * Math.PI/180;
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(135, 206, 255, 0.92)';
+      ctx.arc(cx + Math.cos(ascAng)*(r*0.92), cy + Math.sin(ascAng)*(r*0.92), 10, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(8,8,12,0.95)';
+      ctx.fillText('Asc', cx + Math.cos(ascAng)*(r*0.92) - 14, cy + Math.sin(ascAng)*(r*0.92) + 4);
+
+      // Desenhar planetas passados em `bodies` (array de {name,deg})
+      const GLYPHS = {Sol:'☉', Lua:'☾', Mercúrio:'☿', 'Mercurio':'☿', Vênus:'♀', Venus:'♀', Marte:'♂', 'Júpiter':'♃', 'Jupiter':'♃', 'Saturno':'♄', 'Saturn':'♄', 'Urano':'♅', 'Uranus':'♅', 'Netuno':'♆', 'Neptune':'♆', 'Plutão':'♇', 'Pluto':'♇', 'Lilith':'⚸'};
+      const COLORS = {Sol:'rgba(255,198,80,0.95)', Lua:'rgba(200,230,255,0.95)', Mercúrio:'rgba(220,220,180,0.95)', 'Mercurio':'rgba(220,220,180,0.95)', Vênus:'rgba(255,180,210,0.95)', Venus:'rgba(255,180,210,0.95)', Marte:'rgba(255,140,140,0.95)', 'Júpiter':'rgba(255,220,160,0.95)', 'Saturno':'rgba(220,220,240,0.95)', 'Urano':'rgba(180,240,240,0.95)', 'Netuno':'rgba(170,190,255,0.95)', 'Plutão':'rgba(200,160,255,0.95)', 'Pluto':'rgba(200,160,255,0.95)', 'Lilith':'rgba(40,40,40,0.95)'};
+      bodies.forEach(b => {
+        try{
+          const ang = (b.deg - 90) * Math.PI/180;
+          const rr = r*0.78;
+          const px = cx + Math.cos(ang)*rr;
+          const py = cy + Math.sin(ang)*rr;
+          ctx.beginPath();
+          const color = COLORS[b.name] || 'rgba(200,200,200,0.9)';
+          ctx.fillStyle = color;
+          ctx.arc(px, py, 8, 0, Math.PI*2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(8,8,12,0.95)';
+          ctx.font = '12px Inter, Arial';
+          const g = GLYPHS[b.name] || b.name[0];
+          ctx.fillText(g, px - 6, py + 5);
+          // degree label externo, mais legível e posicionado radialmente
+          ctx.font = '11px Inter, Arial';
+          ctx.fillStyle = 'rgba(220,235,255,0.95)';
+          const degValue = (b.degreeInSign !== undefined ? b.degreeInSign : (b.deg % 30));
+          const degStr = (Math.round(degValue * 10)/10) + '°';
+          const lx = cx + Math.cos(ang) * (r - 22);
+          const ly = cy + Math.sin(ang) * (r - 22);
+          ctx.textAlign = 'center';
+          ctx.fillText(degStr, lx, ly);
+          ctx.textAlign = 'start';
+        }catch(e){}
+      });
+
+      // efeito final (fade in)
+      requestAnimationFrame(()=> {
+        chartCanvas.classList.add('show');
+      });
+    }
+
+    /* ---------------------------
+       Geração do texto interpretativo
+       - Produz 2-3 parágrafos em Português
+       - Usa signo solar, ascendente (se disponível), local e tema
+    ---------------------------- */
+    function generateReading(sunSign, ascSign, locationObj, theme, name) {
+      // frases base por tema
+      const themeIntro = {
+        geral: 'Uma visão ampla revela padrões persistentes — o mapa aponta para caminhos onde suas motivações naturais encontram oportunidades.',
+        amor: 'No coração dos afetos, o mapa destaca como você busca conexão e intimidade, e quais dinâmicas se repetem nas relações.',
+        trabalho: 'No campo profissional, sinais apontam para talentos naturais, ambientes onde você prospera e obstáculos que moldam sua ambição.',
+        espiritualidade: 'Em termos espirituais, ele indica práticas e imagens que ressoam com sua busca interior e formas de encontrar significado.'
+      }[theme] || themeIntro.geral;
+
+      const namePart = name ? `${name},` : '';
+
+      const p1 = `${namePart} nascido(a) sob ${sunSign.name} (${sunSign.glyph}), sua essência tende a se expressar com ${sunSign.name === 'Áries' ? 'impulso e iniciativa' : sunSign.name === 'Touro' ? 'constância e sensibilidade material' : sunSign.name === 'Gêmeos' ? 'curiosidade e comunicação' : sunSign.name === 'Câncer' ? 'cuidado emocional' : sunSign.name === 'Leão' ? 'brilho e generosidade' : sunSign.name === 'Virgem' ? 'detalhe e serviço' : sunSign.name === 'Libra' ? 'busca de equilíbrio' : sunSign.name === 'Escorpião' ? 'intensidade e transformação' : sunSign.name === 'Sagitário' ? 'busca de sentido' : sunSign.name === 'Capricórnio' ? 'disciplina e ambição' : sunSign.name === 'Aquário' ? 'originalidade e comunidade' : 'sensibilidade imaginativa'}. ${themeIntro}`;
+
+      let p2;
+      if (ascSign) {
+        p2 = `Com Ascendente em ${ascSign.sign.name} (${ascSign.sign.glyph}), a maneira como você se apresenta ao mundo suaviza (ou acentua) sua natureza solar. O ascendente colore suas primeiras impressões: ele indica que, na prática, você tende a mostrar ${ascSign.sign.name === 'Áries' ? 'coragem e dinamismo' : ascSign.sign.name === 'Touro' ? 'calma e firmeza' : ascSign.sign.name === 'Gêmeos' ? 'sociabilidade' : ascSign.sign.name === 'Câncer' ? 'sensibilidade' : ascSign.sign.name === 'Leão' ? 'confiança' : ascSign.sign.name === 'Virgem' ? 'discrição' : ascSign.sign.name === 'Libra' ? 'encanto social' : ascSign.sign.name === 'Escorpião' ? 'profundidade' : ascSign.sign.name === 'Sagitário' ? 'otimismo' : ascSign.sign.name === 'Capricórnio' ? 'seriedade' : ascSign.sign.name === 'Aquário' ? 'excentricidade' : 'gentileza prática'}.`;
+      } else {
+        p2 = `Sem hora exata, o ascendente não pôde ser calculado com precisão. Ainda assim, a posição solar e o local de nascimento dão pistas valiosas sobre padrões e predisposições.`;
+      }
+
+      const p3 = `Local: ${locationObj.city}, ${locationObj.country} (lat ${locationObj.lat.toFixed(4)}, lon ${locationObj.lon.toFixed(4)}). A leitura acima integra simbolismos clássicos e uma interpretação contemporânea, com sugestões práticas e imagens para reflexão.`;
+
+      return `<strong style="display:block;margin-bottom:8px;color:#cfe6ff">Resumo</strong><p>${p1}</p><p>${p2}</p><p style="margin-top:8px;color:#dff0ffcc">${p3}</p>`;
+    }
+
+    // Utilitários para casas e aspectos
+    function normalizeDeg(d){ return ((d % 360) + 360) % 360; }
+    function getHouseForDegree(deg, houses){
+      const d = normalizeDeg(deg);
+      for (let i=0;i<12;i++){
+        const start = normalizeDeg(houses[i]);
+        const end = normalizeDeg(houses[(i+1)%12]);
+        if (start < end){
+          if (d >= start && d < end) return i+1;
+        } else {
+          // wrap
+          if (d >= start || d < end) return i+1;
+        }
+      }
+      return 1;
+    }
+
+    function angleDiff(a,b){
+      let d = Math.abs(normalizeDeg(a) - normalizeDeg(b));
+      if (d > 180) d = 360 - d;
+      return d;
+    }
+
+    // Signed difference from a to b in range -180..180 (b - a)
+    function signedAngleDiff(a,b){
+      let d = normalizeDeg(b - a);
+      if (d > 180) d -= 360;
+      return d;
+    }
+
+    function detectAspects(bodies){
+      const aspects = [];
+      const major = [ {name:'Conjunção', angle:0, orb:8}, {name:'Oposição', angle:180, orb:8}, {name:'Quadratura', angle:90, orb:7}, {name:'Trígono', angle:120, orb:7}, {name:'Sextil', angle:60, orb:6} ];
+      for (let i=0;i<bodies.length;i++){
+        for (let j=i+1;j<bodies.length;j++){
+          const a = bodies[i], b = bodies[j];
+          const absDiff = angleDiff(a.deg, b.deg); // 0..180
+          const signed = signedAngleDiff(a.deg, b.deg); // -180..180 direction
+          for (const asp of major){
+            const orb = Math.abs(absDiff - asp.angle);
+            if (orb <= asp.orb){
+              // exact: signed difference relative to exact aspect (signed - asp.angle with sign preserved)
+              const sign = signed >= 0 ? 1 : -1;
+              const exactSigned = (Math.abs(signed) - asp.angle) * sign;
+              aspects.push({type:asp.name, a:a.name, b:b.name, orb: parseFloat(orb.toFixed(1)), signed: parseFloat(signed.toFixed(1)), exact: parseFloat(exactSigned.toFixed(1))});
+              break;
+            }
+          }
+        }
+      }
+      return aspects;
+    }
+
+    // Converte JD para Date UTC
+    function julianDateToDate(jd) {
+      const ms = (jd - 2440587.5) * 86400000.0;
+      return new Date(ms);
+    }
+
+    // Calcula progressões secundárias: 1 dia após nascimento = 1 ano após nascimento
+    // Retorna efemérides no JD progredido
+    async function computeProgressedPositions(natalJD, birthDate, targetDate) {
+      const msPerYear = 365.25 * 24 * 3600 * 1000;
+      const ageYears = Math.floor((targetDate.getTime() - birthDate.getTime()) / msPerYear);
+      const progressedJD = natalJD + ageYears; // 1 day per year
+      // precisamos de um sunApprox para o JD progredido
+      const approxDate = julianDateToDate(progressedJD);
+      const sunSign = getSunSign(approxDate);
+      const sunIndex = ZODIAC.findIndex(z => z.name === sunSign.name);
+      const sunApproxDeg = sunIndex * 30 + 15;
+      const eph = await computeEphemeridesSafe(progressedJD, sunApproxDeg);
+      return {eph, progressedJD, ageYears};
+    }
+
+    // Encontra retorno solar para o ano especificado (quando o Sol transita pela longitude natal)
+    // Busca por amostragem em torno da data do aniversário naquele ano
+    async function findSolarReturn(natalSunDeg, birthMonth, birthDay, year, lon) {
+      // busca em ±15 dias com passo 0.25 dia
+      const center = new Date(Date.UTC(year, birthMonth-1, birthDay, 12,0,0));
+      const centerJD = getJulianDate(new Date(center.getTime()));
+      let best = {jd:centerJD, diff:9999};
+      for (let off = -15; off <= 15; off += 0.25) {
+        const jdTest = centerJD + off;
+        // approx sun degree for this jd via simple method
+        const dt = julianDateToDate(jdTest);
+        const sunSign = getSunSign(dt);
+        const sunIndex = ZODIAC.findIndex(z => z.name === sunSign.name);
+        const sunApproxDeg = sunIndex * 30 + 15;
+        const eph = await computeEphemeridesSafe(jdTest, sunApproxDeg);
+        const sd = eph.sunDeg;
+        const d = angleDiff(sd, natalSunDeg);
+        if (d < best.diff) best = {jd: jdTest, diff: d, sunDeg: sd};
+      }
+      return {jd: best.jd, diff: best.diff, sunDeg: best.sunDeg, date: julianDateToDate(best.jd)};
+    }
+    /* ---------------------------
+       Ações UI / Eventos
+    ---------------------------- */
+
+    // Tenta obter dados de IP (ipapi.co) ou usa localStorage se já existir
+    async function initLocation() {
+      // se já temos cache, usa
+      const cached = localStorage.getItem('astro_location_cache_v1');
+      if (cached) {
+        try {
+          const obj = JSON.parse(cached);
+          fillLocationFields(obj);
+          return;
+        } catch(e){}
+      }
+
+      // tenta API pública ipapi.co (sem chave, para uso básico). Se falhar, tenta ipwho.is
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        if (!res.ok) throw new Error('falha ipapi');
+        const data = await res.json();
+        const obj = {
+          city: data.city || '',
+          country: data.country_name || data.country || '',
+          lat: parseFloat(data.latitude || data.latitude || data.lat || 0),
+          lon: parseFloat(data.longitude || data.longitude || data.lon || 0)
+        };
+        // salva cache
+        localStorage.setItem('astro_location_cache_v1', JSON.stringify(obj));
+        fillLocationFields(obj);
+        return;
+      } catch (e) {
+        // fallback
+        try {
+          const r = await fetch('https://ipwho.is/');
+          const d = await r.json();
+          if (d && d.success !== false) {
+            const obj = {
+              city: d.city || '',
+              country: d.country || '',
+              lat: parseFloat(d.latitude || 0),
+              lon: parseFloat(d.longitude || 0)
+            };
+            localStorage.setItem('astro_location_cache_v1', JSON.stringify(obj));
+            fillLocationFields(obj);
+            return;
+          }
+        } catch(err) {
+          // nada
+        }
+      }
+      // se tudo falhar, deixa em branco
+      fillLocationFields({city:'',country:'',lat:'',lon:''});
+    }
+
+    function fillLocationFields({city,country,lat,lon}) {
+      cityInput.value = city || '';
+      // tenta detectar país BR por nome, senão usa texto cru
+      try {
+        if (country && String(country).toLowerCase().includes('bra')) {
+          countryInput.value = 'Brasil';
+        } else {
+          countryInput.value = country || '';
+        }
+      } catch(e){}
+      latInput.value = lat !== undefined && lat !== null && lat !== '' ? String(lat) : '';
+      lonInput.value = lon !== undefined && lon !== null && lon !== '' ? String(lon) : '';
+      updateMeta('Local detectado: ' + (city? city + ', ' + (country || '') : '—'));
+    }
+
+    function updateMeta(text) {
+      metaInfo.textContent = text;
+    }
+
+    // Tenta usar geolocation do navegador
+    function tryNavigatorGeo() {
+      if (!navigator.geolocation) {
+        alert('Geolocalização do navegador não disponível.');
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(pos => {
+        const lat = pos.coords.latitude, lon = pos.coords.longitude;
+        latInput.value = lat.toFixed(6);
+        lonInput.value = lon.toFixed(6);
+        cityInput.value = cityInput.value || 'Local desconhecido';
+          // Armazena no cache local
+          const obj = {city: cityInput.value, country: countryInput.value || '', lat, lon};
+          localStorage.setItem('astro_location_cache_v1', JSON.stringify(obj));
+        updateMeta('Local obtido via navegador.');
+      }, err => {
+        alert('Permissão negada ou erro ao obter localização do navegador.');
+      }, {enableHighAccuracy:true, timeout:8000});
+    }
+
+    // Limpar campos
+    function resetAll() {
+      nameInput.value = '';
+      dateInput.value = '';
+      timeInput.value = '12:00';
+      timeUnknown.checked = false;
+      // tenta recarregar cache
+      const cached = localStorage.getItem('astro_location_cache_v1');
+      if (cached) {
+        fillLocationFields(JSON.parse(cached));
+      } else {
+        fillLocationFields({city:'',country:'',lat:'',lon:''});
+      }
+      readingEl.innerHTML = '';
+      sunSignText.textContent = '';
+      ascText.textContent = '';
+      signIllustration.textContent = '♑︎';
+      usedLocation.textContent = 'Cidade: —';
+      usedCoords.textContent = 'Latitude: — | Longitude: —';
+      usedDatetime.textContent = 'Data/Hora: —';
+      chartCanvas.classList.remove('show');
+      chartCanvas.style.opacity = 0;
+      // esconder painel de resultado e restaurar formulário centralizado
+      if (resultSection) resultSection.classList.remove('visible');
+      document.body.classList.remove('show-result');
+      document.body.classList.add('centered-form');
+      // restaurar overflow e remover transform que integra o container
+      document.body.style.overflow = '';
+      const cont = document.querySelector('.container'); if (cont) cont.style.transform = '';
+    }
+
+    // Evento gerar
+    generateBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      // validações
+      if (!dateInput.value) {
+        alert('Preencha a data de nascimento.');
+        return;
+      }
+      // checa localização
+      const lat = parseFloat(latInput.value);
+      const lon = parseFloat(lonInput.value);
+      if (Number.isNaN(lat) || Number.isNaN(lon)) {
+        alert('Latitude e longitude válidas são necessárias para gerar o mapa.');
+        return;
+      }
+
+      // monta data/hora em UTC para cálculo:
+      // se hora desconhecida, usa 12:00 por convenção (meio-dia local)
+      const dateParts = dateInput.value.split('-').map(Number);
+      let hours = 12, minutes = 0;
+      if (!timeUnknown.checked) {
+        if (!timeInput.value) {
+          alert('Preencha a hora de nascimento ou marque "Não sei a hora".');
+          return;
+        }
+        const [h,m] = timeInput.value.split(':').map(Number);
+        hours = h; minutes = m;
+      }
+
+      // cria objeto Date local a partir dos inputs (assumimos que o usuário inseriu no horário local do local de nascimento)
+      // Para maior coerência, vamos criar a data como se estivesse no fuso local do navegador — isso gera pequenas diferenças,
+      // mas o algoritmo é simplificado e compreende isso.
+      const localDate = new Date(dateParts[0], dateParts[1]-1, dateParts[2], hours, minutes, 0);
+
+      // para cálculo de JD usamos a representação UTC do momento
+      const dateUTC = new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000));
+
+      const jd = getJulianDate(dateUTC);
+
+      const gmst = getGMSTDegrees(jd);
+      // longitude: entrada aceita no formato de graus (ex: -46.6333)
+      const lst = getLSTDegrees(jd, lon);
+
+      const ascDeg = computeAscendantApprox(lat, lst);
+      // Sol: determinamos posição solar aproximada convertendo mês/dia para grau do zodíaco
+      // Simples: posição do Sol = signo center + proporção do dia dentro do signo (muito simplificado)
+      const sunSign = getSunSign(localDate);
+      // Sun approx degree (set to midpoint of sign for exibição)
+      const sunIndex = ZODIAC.findIndex(z => z.name === sunSign.name);
+      const sunDeg = sunIndex * 30 + 15;
+
+      const ascInfo = degreeToSign(ascDeg);
+
+      const houses = generateWholeSignHouses(ascDeg);
+
+      // Tenta calcular efemérides via biblioteca (se disponível), com fallback simples
+      const eph = await computeEphemeridesSafe(jd, sunDeg);
+      const moonDeg = eph.moonDeg;
+      const mercuryDeg = eph.mercuryDeg;
+      const venusDeg = eph.venusDeg;
+      const marsDeg = eph.marsDeg;
+      const jupiterDeg = eph.jupiterDeg;
+      const saturnDeg = eph.saturnDeg;
+      const uranusDeg = eph.uranusDeg;
+      const neptuneDeg = eph.neptuneDeg;
+      const plutoDeg = eph.plutoDeg;
+      const lilithDeg = eph.lilithDeg;
+
+      const moonInfo = degreeToSign(moonDeg);
+      const sunInfo = degreeToSign(sunDeg);
+      const mercuryInfo = degreeToSign(mercuryDeg);
+      const venusInfo = degreeToSign(venusDeg);
+      const marsInfo = degreeToSign(marsDeg);
+      const jupiterInfo = degreeToSign(jupiterDeg);
+      const saturnInfo = degreeToSign(saturnDeg);
+      const uranusInfo = degreeToSign(uranusDeg);
+      const neptuneInfo = degreeToSign(neptuneDeg);
+
+      // Casas para cada corpo
+      const sunHouse = getHouseForDegree(sunDeg, houses);
+      const moonHouse = getHouseForDegree(moonDeg, houses);
+      const mercuryHouse = getHouseForDegree(mercuryDeg, houses);
+      const venusHouse = getHouseForDegree(venusDeg, houses);
+      const marsHouse = getHouseForDegree(marsDeg, houses);
+      const jupiterHouse = getHouseForDegree(jupiterDeg, houses);
+      const saturnHouse = getHouseForDegree(saturnDeg, houses);
+      const uranusHouse = getHouseForDegree(uranusDeg, houses);
+      const neptuneHouse = getHouseForDegree(neptuneDeg, houses);
+
+      // Prepara corpos para aspectos
+      const bodies = [
+        {name:'Sol', deg:sunDeg, sign:sunInfo.sign, degreeInSign: sunInfo.degreeInSign},
+        {name:'Lua', deg:moonDeg, sign:moonInfo.sign, degreeInSign: moonInfo.degreeInSign},
+        {name:'Mercúrio', deg:mercuryDeg, sign:mercuryInfo.sign, degreeInSign: mercuryInfo.degreeInSign},
+        {name:'Vênus', deg:venusDeg, sign:venusInfo.sign, degreeInSign: venusInfo.degreeInSign},
+        {name:'Marte', deg:marsDeg, sign:marsInfo.sign, degreeInSign: marsInfo.degreeInSign},
+        {name:'Júpiter', deg:jupiterDeg, sign:jupiterInfo.sign, degreeInSign: jupiterInfo.degreeInSign},
+        {name:'Saturno', deg:saturnDeg, sign:saturnInfo.sign, degreeInSign: saturnInfo.degreeInSign},
+        {name:'Urano', deg:uranusDeg, sign:uranusInfo.sign, degreeInSign: uranusInfo.degreeInSign},
+        {name:'Netuno', deg:neptuneDeg, sign:neptuneInfo.sign, degreeInSign: neptuneInfo.degreeInSign},
+        {name:'Plutão', deg:plutoDeg, sign:degreeToSign(plutoDeg).sign, degreeInSign: degreeToSign(plutoDeg).degreeInSign},
+        {name:'Lilith', deg:lilithDeg, sign:degreeToSign(lilithDeg).sign, degreeInSign: degreeToSign(lilithDeg).degreeInSign}
+      ];
+      const aspects = detectAspects(bodies);
+
+      // Casas relevantes (onde há planetas dentre os mencionados)
+      const plutoHouse = getHouseForDegree(plutoDeg, houses);
+      const lilithHouse = getHouseForDegree(lilithDeg, houses);
+      const housesSet = new Set([sunHouse, moonHouse, mercuryHouse, venusHouse, marsHouse, jupiterHouse, saturnHouse, uranusHouse, neptuneHouse, plutoHouse, lilithHouse]);
+      const housesList = Array.from(housesSet).sort((a,b)=>a-b).map(n=>`Casa ${n}`);
+
+      // Gera leitura detalhada primeiro (usada depois do resumo)
+      const readingHtml = generateReading(sunSign, ascInfo || null, {city: cityInput.value || '—', country: countryInput.value || '—', lat, lon}, themeInput.value, nameInput.value);
+
+      // Monta resumo rápido solicitado
+      const quickHtml = `
+        <div style="font-size:14px;color:#cff0ff;margin-bottom:8px"><strong>Resumo rápido</strong></div>
+        <div style="font-size:13px;color:#eaf2ff">
+          <div><strong>Sol em:</strong> ${sunSign.name} ${sunSign.glyph} (Casa ${sunHouse})</div>
+          <div><strong>Lua em:</strong> ${moonInfo.sign.name} ${moonInfo.sign.glyph} (Casa ${moonHouse})</div>
+          <div><strong>Ascendente em:</strong> ${ascInfo.sign.name} ${ascInfo.sign.glyph} (${ascInfo.degreeInSign.toFixed(1)}°)</div>
+          <div><strong>Mercúrio em:</strong> ${mercuryInfo.sign.name} ${mercuryInfo.sign.glyph} (Casa ${mercuryHouse})</div>
+          <div><strong>Vênus em:</strong> ${venusInfo.sign.name} ${venusInfo.sign.glyph} (Casa ${venusHouse})</div>
+          <div><strong>Marte em:</strong> ${marsInfo.sign.name} ${marsInfo.sign.glyph} (Casa ${marsHouse})</div>
+          <div><strong>Júpiter em:</strong> ${jupiterInfo.sign.name} ${jupiterInfo.sign.glyph} (Casa ${jupiterHouse})</div>
+          <div><strong>Saturno em:</strong> ${saturnInfo.sign.name} ${saturnInfo.sign.glyph} (Casa ${saturnHouse})</div>
+          <div><strong>Urano em:</strong> ${uranusInfo.sign.name} ${uranusInfo.sign.glyph} (Casa ${uranusHouse})</div>
+          <div><strong>Netuno em:</strong> ${neptuneInfo.sign.name} ${neptuneInfo.sign.glyph} (Casa ${neptuneHouse})</div>
+          <div style="margin-top:8px"><strong>Casas astrológicas relevantes:</strong> ${housesList.join(', ') || '—'}</div>
+          <div style="margin-top:8px"><strong>Aspectos principais:</strong></div>
+          <ul style="margin-top:6px">
+            ${aspects.length ? aspects.map(a=>`<li>${a.a} — ${a.type} — ${a.b} (orb ${a.orb}°${a.exact>0 ? ' — aplicando '+Math.abs(a.exact)+'°' : a.exact<0 ? ' — separando '+Math.abs(a.exact)+'°' : ''})</li>`).join('') : '<li>— Nenhum aspecto principal identificado</li>'}
+          </ul>
+        </div>
+      `;
+
+      // injeta resumo antes da leitura detalhada
+      // cálculo extra: MC, IC, Descendente, nodos, quíron, fortuna, regentes, elementos/modalidades, asteroides, estrelas fixas, trânsitos
+      const MCdeg = normalizeDeg(lst); // aproximação: MC ~ LST
+      const ICdeg = normalizeDeg(MCdeg + 180);
+      const Descdeg = normalizeDeg(ascDeg + 180);
+
+      // nodos (aprox. placeholders)
+      const northNode = normalizeDeg(moonDeg + 150);
+      const southNode = normalizeDeg(northNode + 180);
+
+      // Quíron (fallback)
+      const chironDeg = normalizeDeg(sunDeg + 130);
+
+      // Parte da Fortuna (simplified: Sun + Moon - Asc)
+      const partOfFortune = normalizeDeg(sunDeg + moonDeg - ascDeg);
+
+      // Regentes de signos (modern)
+      const REGENTS = { 'Áries':'Marte','Touro':'Vênus','Gêmeos':'Mercúrio','Câncer':'Lua','Leão':'Sol','Virgem':'Mercúrio','Libra':'Vênus','Escorpião':'Plutão','Sagitário':'Júpiter','Capricórnio':'Saturno','Aquário':'Urano','Peixes':'Netuno' };
+
+      // Elementos e modalidades
+      const SIGN_ELEMENT = { 'Áries':'Fogo','Touro':'Terra','Gêmeos':'Ar','Câncer':'Água','Leão':'Fogo','Virgem':'Terra','Libra':'Ar','Escorpião':'Água','Sagitário':'Fogo','Capricórnio':'Terra','Aquário':'Ar','Peixes':'Água' };
+      const SIGN_MODE = { 'Áries':'Cardinal','Touro':'Fixo','Gêmeos':'Mutável','Câncer':'Cardinal','Leão':'Fixo','Virgem':'Mutável','Libra':'Cardinal','Escorpião':'Fixo','Sagitário':'Mutável','Capricórnio':'Cardinal','Aquário':'Fixo','Peixes':'Mutável' };
+
+      // Asteroides (fallback offsets)
+      const ceresDeg = normalizeDeg(sunDeg + 200);
+      const pallasDeg = normalizeDeg(sunDeg + 230);
+      const junoDeg = normalizeDeg(sunDeg + 260);
+      const vestaDeg = normalizeDeg(sunDeg + 290);
+
+      // Fixed stars (sample, approximate ecliptic longitudes)
+      const FIXED_STARS = [ {name:'Regulus',deg:149.7}, {name:'Spica',deg:201.3}, {name:'Antares',deg:248.4} ];
+
+      // distribuir planetas por elemento/modo
+      const elemCount = {Fogo:0,Terra:0,Ar:0,Água:0};
+      const modeCount = {Cardinal:0,Fixo:0,Mutável:0};
+      bodies.forEach(b=>{
+        const s = degreeToSign(b.deg).sign.name;
+        const el = SIGN_ELEMENT[s] || 'Terra';
+        const mo = SIGN_MODE[s] || 'Fixo';
+        elemCount[el] = (elemCount[el]||0) + 1;
+        modeCount[mo] = (modeCount[mo]||0) + 1;
+      });
+
+      // regentes das casas (casa i corresponde ao signo do ascendente + i-1)
+      const houseRegents = [];
+      for (let i=0;i<12;i++){
+        const houseStart = houses[i];
+        const sName = degreeToSign(houseStart).sign.name;
+        houseRegents.push({house:i+1, sign:sName, ruler: REGENTS[sName] || '—'});
+      }
+
+      // fixed stars proximity
+      const nearbyStars = [];
+      bodies.forEach(b=>{
+        FIXED_STARS.forEach(st=>{
+          const d = angleDiff(b.deg, st.deg);
+          if (d <= 2) nearbyStars.push({planet:b.name, star:st.name, diff:d.toFixed(1)});
+        });
+      });
+
+      // simple transits: compare current planetary positions (approx) with natal
+      const now = new Date();
+      const jdNow = getJulianDate(new Date(now.getTime() - (now.getTimezoneOffset()*60000)));
+      const nowSunApprox = (function(dt){ const si = ZODIAC.findIndex(z=> z.name === getSunSign(dt).name); return si*30 + 15;})(now);
+      const nowEph = await computeEphemeridesSafe(jdNow, nowSunApprox);
+      const transitBodies = [
+        {label:'Sol', now: nowEph.sunDeg, natal: sunDeg},
+        {label:'Lua', now: nowEph.moonDeg, natal: moonDeg},
+        {label:'Mercúrio', now: nowEph.mercuryDeg, natal: mercuryDeg},
+        {label:'Vênus', now: nowEph.venusDeg, natal: venusDeg},
+        {label:'Marte', now: nowEph.marsDeg, natal: marsDeg},
+        {label:'Júpiter', now: nowEph.jupiterDeg, natal: jupiterDeg},
+        {label:'Saturno', now: nowEph.saturnDeg, natal: saturnDeg},
+        {label:'Urano', now: nowEph.uranusDeg, natal: uranusDeg},
+        {label:'Netuno', now: nowEph.neptuneDeg, natal: neptuneDeg},
+        {label:'Plutão', now: nowEph.plutoDeg || plutoDeg, natal: plutoDeg}
+      ];
+
+      const transitHtmlRows = transitBodies.map(t=>{
+        const diff = angleDiff(t.now, t.natal).toFixed(1);
+        return `<tr><td style="padding:4px 8px">${t.label}</td><td style="padding:4px 8px">${t.natal.toFixed(1)}°</td><td style="padding:4px 8px">${t.now.toFixed(1)}°</td><td style="padding:4px 8px">${diff}°</td></tr>`;
+      }).join('');
+
+      // calcule progressões secundárias e retorno solar (se possível)
+      let progressedInfoHtml = '';
+      try {
+        const prog = await computeProgressedPositions(jd, dateUTC, now);
+        const progEph = prog.eph;
+        const progJD = prog.progressedJD;
+        const progLst = getLSTDegrees(progJD, lon);
+        const progAsc = computeAscendantApprox(lat, progLst);
+        const progHouses = generateWholeSignHouses(progAsc);
+        const progBodies = [
+          {name:'Sol', deg: progEph.sunDeg},
+          {name:'Lua', deg: progEph.moonDeg},
+          {name:'Mercúrio', deg: progEph.mercuryDeg},
+          {name:'Vênus', deg: progEph.venusDeg},
+          {name:'Marte', deg: progEph.marsDeg},
+          {name:'Júpiter', deg: progEph.jupiterDeg}
+        ];
+        progressedInfoHtml = `<div style="margin-top:10px"><strong>Progressões secundárias (idade ~${prog.ageYears}):</strong><div style="margin-top:6px">${progBodies.map(b=> `${b.name}: ${degreeToSign(b.deg).sign.name} ${b.deg.toFixed(1)}° (Casa ${getHouseForDegree(b.deg, progHouses)})`).join('<br>')}</div></div>`;
+      } catch(e){ progressedInfoHtml = `<div style="margin-top:10px;color:#ffb4b4">Erro ao calcular progressões: ${e.message}</div>`; }
+
+      // solar return: próximo retorno solar (este ano ou próximo se já passou)
+      let solarReturnHtml = '';
+      try {
+        const nowYear = new Date().getUTCFullYear();
+        let sr = await findSolarReturn(sunDeg, dateParts[1], dateParts[2], nowYear, lon);
+        if (sr.date < now) sr = await findSolarReturn(sunDeg, dateParts[1], dateParts[2], nowYear + 1, lon);
+        solarReturnHtml = `<div style="margin-top:10px"><strong>Retorno Solar próximo:</strong> ${sr.date.toUTCString()} (dif. ${sr.diff.toFixed(2)}°)</div>`;
+      } catch(e){ solarReturnHtml = `<div style="margin-top:10px;color:#ffb4b4">Erro ao calcular retorno solar: ${e.message}</div>`; }
+
+      // Ícones de signos no resumo do topo
+      const PLANET_GLYPHS = {Sol:'☉', Lua:'☾', Mercúrio:'☿', 'Mercurio':'☿', 'Vênus':'♀', 'Venus':'♀', Marte:'♂', 'Júpiter':'♃', 'Jupiter':'♃', 'Saturno':'♄', 'Saturn':'♄', 'Urano':'♅', 'Uranus':'♅', 'Netuno':'♆', 'Neptune':'♆', 'Plutão':'♇', 'Pluto':'♇', 'Lilith':'⚸'};
+      const topSummaryIcons = [
+        {label:'Sol', glyph:PLANET_GLYPHS.Sol, sign:sunInfo.sign.name, signGlyph:sunInfo.sign.glyph, deg:sunInfo.degreeInSign, house:sunHouse},
+        {label:'Lua', glyph:PLANET_GLYPHS.Lua, sign:moonInfo.sign.name, signGlyph:moonInfo.sign.glyph, deg:moonInfo.degreeInSign, house:moonHouse},
+        {label:'Asc', glyph:'Asc', sign:ascInfo.sign.name, signGlyph:ascInfo.sign.glyph, deg:ascInfo.degreeInSign, house:getHouseForDegree(ascDeg, houses)}
+      ];
+      const topSummaryHtml = `<div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap;justify-content:flex-start;">
+        ${topSummaryIcons.map(it=>`<span style='display:flex;align-items:center;gap:4px;font-size:15px;background:rgba(255,255,255,0.03);border-radius:8px;padding:4px 10px 4px 6px;'><span class='planet-icon'>${it.glyph}</span> <span>${it.label} em <b>${it.sign} ${it.signGlyph}</b> (${it.deg.toFixed(1)}°)</span></span>`).join('')}
+      </div>`;
+
+      // Monta resumo rápido solicitado (sem repetição de Sol/Ascendente)
+      const quickHtml = `
+        ${topSummaryHtml}
+        <div style="font-size:14px;color:#cff0ff;margin-bottom:8px"><strong>Resumo rápido</strong></div>
+        <div style="font-size:13px;color:#eaf2ff">
+          <div><strong>Mercúrio em:</strong> ${mercuryInfo.sign.name} ${mercuryInfo.sign.glyph} (Casa ${mercuryHouse})</div>
+          <div><strong>Vênus em:</strong> ${venusInfo.sign.name} ${venusInfo.sign.glyph} (Casa ${venusHouse})</div>
+          <div><strong>Marte em:</strong> ${marsInfo.sign.name} ${marsInfo.sign.glyph} (Casa ${marsHouse})</div>
+          <div><strong>Júpiter em:</strong> ${jupiterInfo.sign.name} ${jupiterInfo.sign.glyph} (Casa ${jupiterHouse})</div>
+          <div><strong>Saturno em:</strong> ${saturnInfo.sign.name} ${saturnInfo.sign.glyph} (Casa ${saturnHouse})</div>
+          <div><strong>Urano em:</strong> ${uranusInfo.sign.name} ${uranusInfo.sign.glyph} (Casa ${uranusHouse})</div>
+          <div><strong>Netuno em:</strong> ${neptuneInfo.sign.name} ${neptuneInfo.sign.glyph} (Casa ${neptuneHouse})</div>
+          <div style="margin-top:8px"><strong>Casas astrológicas relevantes:</strong> ${housesList.join(', ') || '—'}</div>
+          <div style="margin-top:8px"><strong>Aspectos principais:</strong></div>
+          <ul style="margin-top:6px">
+            ${aspects.length ? aspects.map(a=>`<li>${a.a} — ${a.type} — ${a.b} (orb ${a.orb}°${a.exact>0 ? ' — aplicando '+Math.abs(a.exact)+'°' : a.exact<0 ? ' — separando '+Math.abs(a.exact)+'°' : ''})</li>`).join('') : '<li>— Nenhum aspecto principal identificado</li>'}
+          </ul>
+        </div>
+      `;
+
+      const detailedHtml = `
+        <div style="margin-top:12px;font-size:13px;color:#dbe9ff">
+          <div><strong>Meio do Céu (MC):</strong> ${degreeToSign(MCdeg).sign.name} ${MCdeg.toFixed(1)}°</div>
+          <div><strong>Fundo do Céu (IC):</strong> ${degreeToSign(ICdeg).sign.name} ${ICdeg.toFixed(1)}°</div>
+          <div><strong>Descendente:</strong> ${degreeToSign(Descdeg).sign.name} ${Descdeg.toFixed(1)}°</div>
+          <div><strong>Nodo Norte:</strong> ${degreeToSign(northNode).sign.name} ${northNode.toFixed(1)}° — Nodo Sul: ${degreeToSign(southNode).sign.name} ${southNode.toFixed(1)}°</div>
+          <div><strong>Quíron:</strong> ${degreeToSign(chironDeg).sign.name} ${chironDeg.toFixed(1)}°</div>
+          <div><strong>Parte da Fortuna:</strong> ${degreeToSign(partOfFortune).sign.name} ${partOfFortune.toFixed(1)}°</div>
+          <div style="margin-top:8px"><strong>Regentes das casas:</strong> ${houseRegents.map(h=>`Casa ${h.house}: ${h.sign} → ${h.ruler}`).join(' • ')}</div>
+          <div style="margin-top:8px"><strong>Elementos:</strong> Fogo ${elemCount.Fogo}, Terra ${elemCount.Terra}, Ar ${elemCount.Ar}, Água ${elemCount.Água}</div>
+          <div><strong>Modalidades:</strong> Cardinal ${modeCount.Cardinal}, Fixo ${modeCount.Fixo}, Mutável ${modeCount['Mutável']}</div>
+          <div style="margin-top:8px"><strong>Distribuição planetária:</strong> ${bodies.map(b=>b.name+' '+degreeToSign(b.deg).sign.glyph+' '+(Math.round((b.degreeInSign|| (b.deg%30))*10)/10)+'°').join(', ')}</div>
+          <div style="margin-top:8px"><strong>Asteroides (posições aproximadas):</strong> Ceres ${degreeToSign(ceresDeg).sign.name} ${ceresDeg.toFixed(1)}°, Pallas ${degreeToSign(pallasDeg).sign.name} ${pallasDeg.toFixed(1)}°, Juno ${degreeToSign(junoDeg).sign.name} ${junoDeg.toFixed(1)}°, Vesta ${degreeToSign(vestaDeg).sign.name} ${vestaDeg.toFixed(1)}°</div>
+          <div style="margin-top:8px"><strong>Estrelas fixas próximas:</strong> ${nearbyStars.length? nearbyStars.map(s=>`${s.planet} ≈ ${s.star} (${s.diff}°)`).join(', '): '— nenhuma identificada'}</div>
+          <div style="margin-top:10px"><strong>Trânsitos (diferença entre posição atual e natal):</strong>
+            <table style="width:100%;margin-top:8px;border-collapse:collapse"><thead><tr style="text-align:left;color:#cfe6ff"><th>Planeta</th><th>Natal</th><th>Atual</th><th>Dif</th></tr></thead><tbody>${transitHtmlRows}</tbody></table>
+          </div>
+          ${progressedInfoHtml}
+          ${solarReturnHtml}
+        </div>
+      `;
+
+      readingEl.innerHTML = quickHtml + readingHtml + detailedHtml;
+      readingEl.classList.add('show');
+
+      // Atualiza UI
+      signIllustration.textContent = sunSign.glyph;
+      signIllustration.style.opacity = 1;
+      signIllustration.classList.add('show');
+
+      // Atualiza ícones no topo
+      const planetIconsEl = document.getElementById('planetIcons');
+      planetIconsEl.innerHTML = '';
+      // ordem: Sol, Lua, Asc, Mercúrio, Vênus, Marte, Júpiter, Saturno, Urano, Netuno, Plutão, Lilith
+      const topItems = [
+        {label:'Sol', glyph:PLANET_GLYPHS.Sol, sign:sunInfo.sign.name, deg:sunInfo.degreeInSign, house:sunHouse},
+        {label:'Lua', glyph:PLANET_GLYPHS.Lua, sign:moonInfo.sign.name, deg:moonInfo.degreeInSign, house:moonHouse},
+        {label:'Asc', glyph:'Asc', sign:ascInfo.sign.name, deg:ascInfo.degreeInSign, house: getHouseForDegree(ascDeg, houses)},
+        {label:'Mercúrio', glyph:PLANET_GLYPHS.Mercúrio, sign:mercuryInfo.sign.name, deg:mercuryInfo.degreeInSign, house:mercuryHouse},
+        {label:'Vênus', glyph:PLANET_GLYPHS['Vênus'], sign:venusInfo.sign.name, deg:venusInfo.degreeInSign, house:venusHouse},
+        {label:'Marte', glyph:PLANET_GLYPHS.Marte, sign:marsInfo.sign.name, deg:marsInfo.degreeInSign, house:marsHouse},
+        {label:'Júpiter', glyph:PLANET_GLYPHS['Júpiter'], sign:jupiterInfo.sign.name, deg:jupiterInfo.degreeInSign, house:jupiterHouse},
+        {label:'Saturno', glyph:PLANET_GLYPHS['Saturno'], sign:saturnInfo.sign.name, deg:saturnInfo.degreeInSign, house:saturnHouse},
+        {label:'Urano', glyph:PLANET_GLYPHS['Urano'], sign:uranusInfo.sign.name, deg:uranusInfo.degreeInSign, house:uranusHouse},
+        {label:'Netuno', glyph:PLANET_GLYPHS['Netuno'], sign:neptuneInfo.sign.name, deg:neptuneInfo.degreeInSign, house:neptuneHouse},
+        {label:'Plutão', glyph:PLANET_GLYPHS['Plutão'], sign:degreeToSign(plutoDeg).sign.name, deg:degreeToSign(plutoDeg).degreeInSign, house:plutoHouse},
+        {label:'Lilith', glyph:PLANET_GLYPHS['Lilith'], sign:degreeToSign(lilithDeg).sign.name, deg:degreeToSign(lilithDeg).degreeInSign, house:lilithHouse}
+      ];
+      topItems.forEach(it => {
+        const d = document.createElement('div'); d.className = 'planet-badge';
+        d.innerHTML = `<span class="planet-icon">${it.glyph}</span><strong style="min-width:68px">${it.label}</strong><span style="opacity:.9">${it.sign} ${it.deg !== undefined ? it.deg.toFixed(1) + '°' : ''}</span><span style="margin-left:6px;color:#9fb9ff66">(${it.house})</span>`;
+        planetIconsEl.appendChild(d);
+      });
+
+      usedLocation.textContent = `Cidade: ${cityInput.value || '—'}, ${countryInput.value || '—'}`;
+      usedCoords.textContent = `Latitude: ${lat.toFixed(4)} | Longitude: ${lon.toFixed(4)}`;
+      usedDatetime.textContent = `Data/Hora (local considerada): ${dateInput.value} ${timeUnknown.checked ? '(hora desconhecida — 12:00 usada)' : timeInput.value}`;
+
+      // (leitura já gerada acima junto com o resumo)
+
+      // Desenha gráfico (passa corpos para marcação)
+      drawChart(sunDeg, ascDeg, houses, bodies);
+
+      // mostra painel de resultado suavemente: remove centralização e exibe painel fixo vindo da direita
+      document.body.classList.remove('centered-form');
+      document.body.classList.add('show-result');
+      // bloquear scroll global para garantir que todo conteúdo caiba na tela
+      document.body.style.overflow = 'hidden';
+      // empurra levemente o container para integrar visualmente com o painel
+      const cont = document.querySelector('.container'); if (cont) cont.style.transform = 'translateX(-6%)';
+      if (resultSection) setTimeout(()=> resultSection.classList.add('visible'), 40);
+
+      // Adiciona pequeno delay para animar ilustração (já gerenciada no CSS)
+      signIllustration.classList.add('show');
+    });
+
+    useGeoBtn.addEventListener('click', (e) => {
+      tryNavigatorGeo();
+    });
+
+    resetBtn.addEventListener('click', (e) => {
+      resetAll();
+    });
+
+    // Ativa/desativa input de hora
+    timeUnknown.addEventListener('change', () => {
+      timeInput.disabled = timeUnknown.checked;
+      if (timeUnknown.checked) {
+        timeInput.value = '12:00';
+      }
+    });
+
+    // Inicialização
+    (function boot() {
+      initLocation();
+      // tenta preencher data com padrão (hoje como placeholder)
+      const today = new Date();
+      const iso = today.toISOString().slice(0,10);
+      dateInput.value = iso;
+      // deixar canvas inicial com opacidade 0
+      chartCanvas.style.opacity = 1;
+      chartCanvas.classList.remove('show');
+      // inicialmente centraliza o formulário e mantém o painel de resultado fora da tela
+      document.body.classList.add('centered-form');
+    })();
+
+    // fechar painel de resultado
+    const closeResultBtn = document.getElementById('closeResultBtn');
+    if (closeResultBtn) {
+      closeResultBtn.addEventListener('click', () => {
+        if (resultSection) resultSection.classList.remove('visible');
+        document.body.classList.remove('show-result');
+        document.body.classList.add('centered-form');
+        document.body.style.overflow = '';
+        const cont = document.querySelector('.container'); if (cont) cont.style.transform = '';
+      });
+    }
+
+    // Tornar campos lat/lon numericamente amigáveis (limpa vírgulas)
+    [latInput, lonInput].forEach(inp => {
+      inp.addEventListener('input', (e) => {
+        inp.value = inp.value.replace(',', '.');
+      });
+    });
+
+  </script>
+</body>
+</html>
